@@ -22,19 +22,19 @@ def Get_Balance(client,symbol: str = "USDT"):
 
 
 
-def get_position_history(client,defined_interval: str = "m"): # 'm' for montly, 'a' for all time
+def get_position_history_auto(client,defined_interval: str = "m"): # 'm' for montly, 'a' for all time
     # Convert both to Unix time
     if defined_interval == "m":
-        start_time = int(time.time() *1000) - (31 * 24 * 60 * 60 * 1000)
-    if defined_interval == "a":
+        start_time = int(int(time.time() *1000) - (30.4 * 24 * 60 * 60 * 1000))
+    elif defined_interval == "a":
         timezone = pytz.timezone("Etc/GMT+5")
         date_origin = datetime(2024,7,20,0,0,0, tzinfo=timezone) # July 20 of 2024
         utc_date_origin = (date_origin.astimezone(pytz.utc).timestamp())*1000
         date = int(time.time() *1000) - (365 * 24 * 60 * 60 * 1000)
-        if utc_date_origin < date:
-            start_time = date
+        if date < utc_date_origin: #If the requested date is before the products launch
+            start_time = utc_date_origin 
         else:
-            start_time = utc_date_origin
+            start_time = date  - (365 * 24 * 60 * 60 * 1000)
 
     concat_list = []
     #Get the first hsitory of 7 days
@@ -51,9 +51,68 @@ def get_position_history(client,defined_interval: str = "m"): # 'm' for montly, 
         print(f"An exception occurred connecting to Bybit 'get_closed_pnl' endpoint: {e}")
         return []
 
+def get_position_history_manual(client,start_date: datetime, end_date: datetime):
+    start_time = int(start_date.timestamp())*1000
+    end_time = int(end_date.timestamp())*1000
 
-def extract_kpi(orders:list):
-    pass # TO DO
+    #Check if the start date is before the products launch
+    date_origin = datetime(2024,7,20,0,0,0, tzinfo=pytz.timezone("Etc/GMT+5")) # July 20 of 2024
+    utc_date_origin = (date_origin.astimezone(pytz.utc).timestamp())*1000
+    if start_time < utc_date_origin:
+        start_time = utc_date_origin
+    
+    concat_list = []
+    #Get the first hsitory of 7 days
+    try:
+        while start_time <= end_time:
+            res = client.get_closed_pnl(category="linear",endTime = end_time, limit=100)
+            end_time = int(res["result"]["list"][-1]["createdTime"])
+            concat_list.extend(res["result"]["list"])
+        return concat_list
+    except Exception as e:
+        print(f"An exception occurred connecting to Bybit 'get_closed_pnl' endpoint: {e}")
+        return []
+
+def convert_order_to_register(orders:list, final_balance:float):
+    ret = []
+    for order in orders:
+        ret.append({
+            "Id": order["orderId"],
+            "Fecha": datetime.fromtimestamp(int(order["createdTime"])/1000).strftime("%m/%d/%Y %H:%M:%S"),
+            "Cantidad": order["qty"],
+            "Profit": str(round(float(order["closedPnl"]),4)),
+            "Aporte": str(round((float(order["closedPnl"])/final_balance)*100,4))
+        })
+    return ret
+
+
+def extract_kpi(orders:list, initial_balance:float):
+    ret = [initial_balance]
+    profit = 0
+
+    for order in orders:
+        profit += float(order["closedPnl"])
+    
+    ret.append(profit + initial_balance)
+
+    ret.append(profit)
+
+    ret.append((profit/initial_balance)*100)
+
+    #Convert all registers to formatted strings
+    for i in range(len(ret)):
+        if i != 3 and i != 2:
+            ret[i] = f"{ret[i]:.2f} USDT"
+        elif i == 3:
+            ret[i] = f"{ret[i]:.2f}%"
+        elif i == 2:
+            if ret[i] < 0:
+                ret[i] = f"- {ret[i]:.2f} USDT"
+            else:
+                ret[i] = f"+ {ret[i]:.2f} USDT"
+
+    return ret
+
 
 
 
