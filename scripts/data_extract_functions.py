@@ -1,6 +1,7 @@
 import time
 import pytz
 from datetime import datetime
+from decimal import Decimal, getcontext
 
 '''
 ###################################################################################
@@ -87,13 +88,15 @@ def convert_order_to_register(orders:list, final_balance:float):
 
 
 def extract_kpi(orders:list, initial_balance:float):
+    getcontext().prec = 2
+    initial_balance = Decimal(initial_balance)
     ret = [initial_balance]
-    profit = 0
+    profit = Decimal(0)
 
     for order in orders:
-        profit += float(order["closedPnl"])
+        profit += Decimal(order["closedPnl"])
     
-    ret.append(profit + initial_balance)
+    ret.append(initial_balance + profit)
 
     ret.append(profit)
 
@@ -107,26 +110,11 @@ def extract_kpi(orders:list, initial_balance:float):
             ret[i] = f"{ret[i]:.2f}%"
         elif i == 2:
             if ret[i] < 0:
-                ret[i] = f"- {ret[i]:.2f} USDT"
+                ret[i] = f"{ret[i]:.2f} USDT"
             else:
                 ret[i] = f"+ {ret[i]:.2f} USDT"
 
     return ret
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == '__main__':
